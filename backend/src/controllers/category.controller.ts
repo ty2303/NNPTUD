@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { AuthRequest } from '../types';
+
 
 // GET /api/categories
 export const getCategories = async (req: Request, res: Response): Promise<void> => {
@@ -12,16 +12,16 @@ export const getCategoryById = async (req: Request, res: Response): Promise<void
 };
 
 // POST /api/categories  (admin)
-export const createCategory = async (req: AuthRequest, res: Response): Promise<void> => {
+export const createCategory = async (req: Request, res: Response): Promise<void> => {
   // TODO: implement create category logic
 };
 
 // PUT /api/categories/:id  (admin)
-export const updateCategory = async (req: AuthRequest, res: Response): Promise<void> => {
+export const updateCategory = async (req: Request, res: Response): Promise<void> => {
   // TODO: implement update category logic
 };
 
 // DELETE /api/categories/:id  (admin)
-export const deleteCategory = async (req: AuthRequest, res: Response): Promise<void> => {
+export const deleteCategory = async (req: Request, res: Response): Promise<void> => {
   // TODO: implement delete category logic
 };
