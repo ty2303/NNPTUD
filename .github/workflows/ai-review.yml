@@ -1,0 +1,35 @@
+name: AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: AI Code Review
+        uses: anc95/ChatGPT-CodeReview@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          MODEL: gpt-4o-mini
+          LANGUAGE: Vietnamese
+          top_p: 1
+          temperature: 0.2
+          max_tokens: 2000
+          PROMPT: |
+            Bạn là một senior developer đang review code cho đồ án môn học.
+            Hãy review theo các tiêu chí sau:
+            1. Lỗi logic hoặc bug tiềm ẩn
+            2. Vấn đề bảo mật (XSS, SQL injection, lộ token...)
+            3. Code style và best practices (TypeScript, React, Node.js)
+            4. Hiệu năng
+            Trả lời bằng tiếng Việt, ngắn gọn và rõ ràng.
+            Nếu code tốt, hãy nói vậy thay vì cố tìm lỗi.
