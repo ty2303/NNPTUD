@@ -1,8 +1,6 @@
 # Đồ Án Môn Ngôn Ngữ Phát Triển Ứng Dụng
 
-## Giới Thiệu
-
-Đây là đồ án báo cáo môn **Ngôn Ngữ Phát Triển Ứng Dụng**, được thực hiện nhằm vận dụng các kiến thức đã học vào xây dựng một ứng dụng thực tế.
+> Ứng dụng thương mại điện tử bán điện thoại di động — Full-stack TypeScript
 
 ---
 
@@ -10,9 +8,10 @@
 
 | Họ và Tên | MSSV | Vai Trò |
 |-----------|------|---------|
-|           |      |         |
-|           |      |         |
-|           |      |         |
+|           |      | Leader  |
+|           |      | Backend |
+|           |      | Backend |
+|           |      | Frontend|
 
 - **Lớp:**
 - **Giảng viên hướng dẫn:**
@@ -20,32 +19,37 @@
 
 ---
 
-## Mô Tả Đồ Án
-
-> *(Mô tả ngắn gọn về đề tài, mục tiêu và phạm vi của đồ án)*
-
-### Mục Tiêu
-
-- Xây dựng ứng dụng đáp ứng các yêu cầu nghiệp vụ thực tế
-- Áp dụng các kỹ thuật lập trình hiện đại
-- Rèn luyện kỹ năng làm việc nhóm và quản lý dự án
-
-### Chức Năng Chính
-
-- [ ] Chức năng 1
-- [ ] Chức năng 2
-- [ ] Chức năng 3
-
----
-
-## Công Nghệ Sử Dụng
+## Tech Stack
 
 | Thành Phần | Công Nghệ |
 |-----------|-----------|
-| Frontend  |           |
-| Backend   |           |
-| Database  |           |
-| Khác      |           |
+| Frontend  | React 19 + TypeScript + Vite 7 + Tailwind CSS 4 |
+| Backend   | Node.js + Express + TypeScript |
+| Database  | MongoDB (Mongoose ODM) |
+| Auth      | JWT + Google OAuth2 + Passport.js |
+| Storage   | Cloudinary |
+| Realtime  | Socket.IO |
+| Email     | Nodemailer (Gmail SMTP) |
+
+---
+
+## 13 Models
+
+| # | Model | Mô tả |
+|---|-------|-------|
+| 1 | **User** | Tài khoản người dùng, có role USER/ADMIN |
+| 2 | **Product** | Sản phẩm điện thoại (kèm ProductVariant) |
+| 3 | **Category** | Danh mục sản phẩm |
+| 4 | **Order** | Đơn hàng (kèm OrderItem) |
+| 5 | **Cart** | Giỏ hàng (kèm CartItem) |
+| 6 | **Review** | Đánh giá sản phẩm |
+| 7 | **ReviewAspectAnalysis** | Phân tích cảm xúc đánh giá |
+| 8 | **Wishlist** | Danh sách yêu thích |
+| 9 | **Voucher** | Mã giảm giá |
+| 10 | **ChatConversation** | Hội thoại chat (kèm ChatMessage) |
+| 11 | **ImportJob** | Theo dõi import sản phẩm hàng loạt |
+| 12 | **Notification** | Thông báo người dùng |
+| 13 | **Address** | Địa chỉ giao hàng đã lưu |
 
 ---
 
@@ -53,42 +57,90 @@
 
 ```
 NNPTUD/
-├── src/
-├── docs/
-├── README.md
-└── ...
+├── frontend/                  # React 19 + TypeScript + Vite
+│   └── src/
+│       ├── api/               # Axios HTTP client services
+│       ├── components/        # UI components (admin, home, layout, ui)
+│       ├── hooks/             # Custom React hooks
+│       ├── pages/             # Route pages
+│       │   └── admin/         # Admin dashboard pages
+│       ├── router/            # Route configuration & guards
+│       ├── store/             # Zustand state management
+│       ├── types/             # TypeScript type definitions
+│       └── utils/             # Utility functions
+│
+└── backend/                   # Node.js + Express + TypeScript
+    └── src/
+        ├── config/            # DB, Cloudinary, env config
+        ├── models/            # 13 Mongoose models
+        ├── controllers/       # Request handlers (CRUD)
+        ├── routes/            # Express routers
+        ├── middlewares/       # Auth, Role, Upload middleware
+        ├── services/          # JWT, Cloudinary, Email services
+        └── types/             # TypeScript type definitions
 ```
 
 ---
 
-## Hướng Dẫn Cài Đặt
+## API Endpoints
 
+### Auth
+| Method | Endpoint | Quyền | Mô tả |
+|--------|----------|-------|-------|
+| POST | `/api/auth/register` | Public | Đăng ký |
+| POST | `/api/auth/login` | Public | Đăng nhập |
+| POST | `/api/auth/forgot-password` | Public | Quên mật khẩu |
+| POST | `/api/auth/reset-password` | Public | Đặt lại mật khẩu |
+| GET  | `/api/auth/google` | Public | Google OAuth2 |
+
+### Products, Categories, Cart, Orders, Reviews, Wishlist, Vouchers, Notifications, Addresses
+> Xem chi tiết trong từng file `src/routes/*.routes.ts`
+
+---
+
+## Phân Công Backend (theo thành viên)
+
+| Thành Viên | Module |
+|-----------|--------|
+| TV 1 | `auth.controller` + `user.controller` |
+| TV 2 | `product.controller` + `category.controller` + `upload.controller` |
+| TV 3 | `order.controller` + `voucher.controller` |
+| TV 4 | `cart.controller` + `wishlist.controller` + `review.controller` |
+| TV 5 | `notification.controller` + `address.controller` + `chat` |
+
+---
+
+## Cài Đặt & Chạy
+
+### Backend
 ```bash
-# Clone repository
-git clone https://github.com/ty2303/NNPTUD.git
-cd NNPTUD
+cd backend
+cp .env.example .env     # điền thông tin vào .env
+npm install
+npm run dev              # http://localhost:8080
+```
 
-# Cài đặt dependencies
-# (thêm lệnh tương ứng với công nghệ sử dụng)
-
-# Chạy ứng dụng
-# (thêm lệnh khởi động)
+### Frontend
+```bash
+cd frontend
+npm install
+npm run dev              # http://localhost:5173
 ```
 
 ---
 
-## Kết Quả
+## Biến Môi Trường Backend (.env)
 
-> *(Thêm ảnh chụp màn hình hoặc demo link tại đây)*
-
----
-
-## Tài Liệu Tham Khảo
-
--
-
----
-
-## Giấy Phép
-
-Dự án được thực hiện phục vụ mục đích học tập tại trường đại học.
+```env
+PORT=8080
+MONGODB_URI=mongodb+srv://...
+JWT_SECRET=your_secret
+CLOUDINARY_CLOUD_NAME=...
+CLOUDINARY_API_KEY=...
+CLOUDINARY_API_SECRET=...
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+EMAIL_USER=...
+EMAIL_PASS=...
+CLIENT_URL=http://localhost:5173
+```
