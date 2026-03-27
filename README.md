@@ -4,6 +4,7 @@
 
 ![Frontend CI](https://github.com/ty2303/NNPTUD/actions/workflows/frontend-ci.yml/badge.svg)
 ![Backend CI](https://github.com/ty2303/NNPTUD/actions/workflows/backend-ci.yml/badge.svg)
+![AI Code Review](https://github.com/ty2303/NNPTUD/actions/workflows/ai-review.yml/badge.svg)
 
 ---
 
