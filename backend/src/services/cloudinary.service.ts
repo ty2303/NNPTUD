@@ -1,22 +1,16 @@
-import cloudinary from '../config/cloudinary';
-import streamifier from 'streamifier';
+// TODO: implement Cloudinary upload service
 
+// Upload single image buffer to Cloudinary
+// Returns: { url: string, publicId: string }
 export const uploadToCloudinary = (
   buffer: Buffer,
   folder: string = 'nnptud'
 ): Promise<{ url: string; publicId: string }> => {
-  return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      { folder, resource_type: 'image' },
-      (error, result) => {
-        if (error || !result) return reject(error);
-        resolve({ url: result.secure_url, publicId: result.public_id });
-      }
-    );
-    streamifier.createReadStream(buffer).pipe(uploadStream);
-  });
+  // TODO: use cloudinary.uploader.upload_stream with streamifier
+  return Promise.resolve({ url: '', publicId: '' });
 };
 
+// Delete image from Cloudinary by publicId
 export const deleteFromCloudinary = async (publicId: string): Promise<void> => {
-  await cloudinary.uploader.destroy(publicId);
+  // TODO: use cloudinary.uploader.destroy(publicId)
 };

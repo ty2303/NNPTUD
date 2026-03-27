@@ -9,58 +9,22 @@ import { config } from './config/env';
 import { connectDB } from './config/database';
 import routes from './routes';
 
-// ---- Passport Google Strategy ----
-import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
-import { User } from './models/User';
-import { Role } from './types';
+// TODO: setup Passport Google OAuth2 Strategy
+// import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+// passport.use(new GoogleStrategy({ ... }, async (accessToken, refreshToken, profile, done) => {
+//   // TODO: find or create user from Google profile
+// }));
 
-passport.use(
-  new GoogleStrategy(
-    {
-      clientID:     config.google.clientId,
-      clientSecret: config.google.clientSecret,
-      callbackURL:  config.google.callbackUrl,
-    },
-    async (_accessToken, _refreshToken, profile, done) => {
-      try {
-        const email = profile.emails?.[0].value || '';
-        let user = await User.findOne({ email });
-
-        if (!user) {
-          user = await User.create({
-            username:    profile.displayName,
-            email,
-            googleId:    profile.id,
-            avatar:      profile.photos?.[0].value || '',
-            hasPassword: false,
-            role:        Role.USER,
-          });
-        } else if (!user.googleId) {
-          user.googleId = profile.id;
-          await user.save();
-        }
-
-        done(null, { id: user._id.toString(), email: user.email, role: user.role });
-      } catch (err) {
-        done(err as Error);
-      }
-    }
-  )
-);
-
-// ---- Express App ----
 const app  = express();
 const http = createServer(app);
 
-// Socket.IO
+// TODO: setup Socket.IO
 const io = new SocketServer(http, {
   cors: { origin: config.clientUrl, credentials: true },
 });
 
 io.on('connection', (socket) => {
-  console.log(`🔌 Socket connected: ${socket.id}`);
-  socket.on('join', (userId: string) => socket.join(userId));
-  socket.on('disconnect', () => console.log(`🔌 Socket disconnected: ${socket.id}`));
+  // TODO: handle socket events (join room, disconnect, etc.)
 });
 
 // Middleware
@@ -75,21 +39,22 @@ app.use('/api', routes);
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'OK', timestamp: new Date().toISOString() }));
 
-// 404
-app.use((_req, res) => res.status(404).json({ success: false, message: 'Route not found' }));
+// 404 handler
+app.use((_req, res) => {
+  res.status(404).json({ success: false, message: 'Route not found' });
+});
 
 // Global error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Unhandled error:', err);
+  console.error(err);
   res.status(500).json({ success: false, message: err.message || 'Internal server error' });
 });
 
-// Start
+// Start server
 const start = async () => {
   await connectDB();
   http.listen(config.port, () => {
-    console.log(`🚀 Server running on http://localhost:${config.port}`);
-    console.log(`📦 Environment: ${config.nodeEnv}`);
+    console.log(`Server running on http://localhost:${config.port}`);
   });
 };
 
