@@ -1,0 +1,94 @@
+name: AI Code Review
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  review:
+    # Chỉ chạy khi comment trong PR có chứa @codex
+    if: |
+      github.event.issue.pull_request != null &&
+      contains(github.event.comment.body, '@codex')
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Review code với AI
+        uses: actions/github-script@v7
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const prNumber = context.issue.number;
+
+            // Lấy thông tin PR
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+
+            // Lấy danh sách file thay đổi
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+
+            // Gộp diff, giới hạn 8000 ký tự để tránh vượt token
+            const diff = files
+              .map(f => `### ${f.filename} (+${f.additions} / -${f.deletions})\n\`\`\`diff\n${f.patch ?? '(binary)'}\n\`\`\``)
+              .join('\n\n')
+              .slice(0, 8000);
+
+            // Gọi OpenAI API
+            const res = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                temperature: 0.2,
+                max_tokens: 2000,
+                messages: [
+                  {
+                    role: 'system',
+                    content: [
+                      'Bạn là senior developer đang review code cho đồ án môn học (TypeScript, React, Node.js/Express, MongoDB).',
+                      'Review theo các tiêu chí: lỗi logic, bảo mật (XSS, injection, lộ token), best practices, hiệu năng.',
+                      'Trả lời bằng tiếng Việt, ngắn gọn, rõ ràng.',
+                      'Nếu code tốt thì nói vậy, không cố tìm lỗi.',
+                      'Format: dùng emoji ✅ cho điểm tốt, ⚠️ cho cảnh báo, ❌ cho lỗi cần sửa.',
+                    ].join(' '),
+                  },
+                  {
+                    role: 'user',
+                    content: `PR: **${pr.title}**\nMô tả: ${pr.body ?? 'Không có'}\n\n${diff}`,
+                  },
+                ],
+              }),
+            });
+
+            const json = await res.json();
+
+            if (!res.ok) {
+              throw new Error(`OpenAI API error: ${JSON.stringify(json)}`);
+            }
+
+            const review = json.choices[0].message.content;
+
+            // Đăng comment vào PR
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: `## 🤖 Codex Review\n\n${review}\n\n---\n*Triggered by @${context.actor}*`,
+            });
