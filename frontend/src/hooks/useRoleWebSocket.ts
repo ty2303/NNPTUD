@@ -9,7 +9,7 @@ import { useToastStore } from '@/store/useToastStore';
  * updates the auth store and redirects accordingly.
  */
 export function useRoleWebSocket() {
-  const { token, user, syncRole } = useAuthStore();
+  const { accessToken: token, user, syncRole } = useAuthStore();
   const clientRef = useRef<Client | null>(null);
 
   useEffect(() => {

@@ -16,7 +16,7 @@ const STATUS_LABEL: Record<string, string> = {
  * When admin updates an order belonging to this user, show a toast.
  */
 export function useOrderWebSocket() {
-  const { token, user } = useAuthStore();
+  const { accessToken: token, user } = useAuthStore();
   const clientRef = useRef<Client | null>(null);
 
   useEffect(() => {

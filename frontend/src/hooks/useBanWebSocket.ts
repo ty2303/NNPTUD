@@ -9,7 +9,7 @@ import { useToastStore } from '@/store/useToastStore';
  * When unbanned, shows an informational toast.
  */
 export function useBanWebSocket() {
-  const { token, user, logout } = useAuthStore();
+  const { accessToken: token, user, logout } = useAuthStore();
   const clientRef = useRef<Client | null>(null);
 
   useEffect(() => {
