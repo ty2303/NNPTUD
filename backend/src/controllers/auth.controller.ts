@@ -178,7 +178,15 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
     await user.save();
 
     const resetUrl = `${config.clientUrl}/reset-password?token=${token}`;
-    await sendPasswordResetEmail(email, resetUrl);
+
+    try {
+      await sendPasswordResetEmail(email, resetUrl);
+    } catch {
+      // Email chưa cấu hình — vẫn trả success, log token ra console khi dev
+      if (config.nodeEnv === 'development') {
+        console.log(`[DEV] Reset URL: ${resetUrl}`);
+      }
+    }
 
     res.json({ success: true, message: 'Link đặt lại mật khẩu đã được gửi đến email của bạn' });
   } catch (err) {
