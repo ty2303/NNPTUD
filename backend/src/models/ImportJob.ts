@@ -9,7 +9,7 @@ export interface IImportJob extends IBaseDocument {
   totalRows: number;
   successCount: number;
   failCount: number;
-  errors: { row: number; message: string }[];
+  importErrors: { row: number; message: string }[];
   completedAt?: Date;
 }
 
@@ -21,7 +21,7 @@ const ImportJobSchema = new Schema<IImportJob>(
     totalRows:    { type: Number, default: 0 },
     successCount: { type: Number, default: 0 },
     failCount:    { type: Number, default: 0 },
-    errors: [
+    importErrors: [
       {
         row:     { type: Number },
         message: { type: String },
