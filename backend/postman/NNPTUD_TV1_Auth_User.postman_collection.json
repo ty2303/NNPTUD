@@ -5,9 +5,11 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:8080/api" },
-    { "key": "token",   "value": "" },
-    { "key": "adminToken", "value": "" }
+    { "key": "baseUrl",       "value": "http://localhost:8080/api" },
+    { "key": "accessToken",   "value": "" },
+    { "key": "refreshToken",  "value": "" },
+    { "key": "adminToken",    "value": "" },
+    { "key": "token",         "value": "" }
   ],
   "item": [
     {
@@ -21,11 +23,14 @@
               "script": {
                 "exec": [
                   "pm.test('Status 201', () => pm.response.to.have.status(201));",
-                  "pm.test('Has token', () => {",
+                  "pm.test('Has accessToken + refreshToken', () => {",
                   "  const json = pm.response.json();",
                   "  pm.expect(json.success).to.be.true;",
-                  "  pm.expect(json.data.token).to.be.a('string');",
-                  "  pm.collectionVariables.set('token', json.data.token);",
+                  "  pm.expect(json.data.accessToken).to.be.a('string');",
+                  "  pm.expect(json.data.refreshToken).to.be.a('string');",
+                  "  pm.collectionVariables.set('accessToken',  json.data.accessToken);",
+                  "  pm.collectionVariables.set('refreshToken', json.data.refreshToken);",
+                  "  pm.collectionVariables.set('token',        json.data.accessToken);",
                   "});"
                 ]
               }
@@ -72,10 +77,14 @@
               "script": {
                 "exec": [
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Has token', () => {",
+                  "pm.test('Has accessToken + refreshToken', () => {",
                   "  const json = pm.response.json();",
                   "  pm.expect(json.success).to.be.true;",
-                  "  pm.collectionVariables.set('token', json.data.token);",
+                  "  pm.expect(json.data.accessToken).to.be.a('string');",
+                  "  pm.expect(json.data.refreshToken).to.be.a('string');",
+                  "  pm.collectionVariables.set('accessToken',  json.data.accessToken);",
+                  "  pm.collectionVariables.set('refreshToken', json.data.refreshToken);",
+                  "  pm.collectionVariables.set('token',        json.data.accessToken);",
                   "});"
                 ]
               }
@@ -134,6 +143,101 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"Admin123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has new accessToken', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data.accessToken).to.be.a('string');",
+                  "  pm.collectionVariables.set('accessToken', json.data.accessToken);",
+                  "  pm.collectionVariables.set('token',       json.data.accessToken);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Refresh Token - Invalid (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"invalid.refresh.token\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Logout success', () => pm.expect(pm.response.json().success).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/logout",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Refresh Token After Logout (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 401 - token revoked', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
             }
           }
         },

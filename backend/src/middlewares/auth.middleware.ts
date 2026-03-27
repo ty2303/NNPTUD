@@ -1,5 +1,5 @@
 import { RequestHandler } from 'express';
-import { verifyToken } from '../services/jwt.service';
+import { verifyAccessToken } from '../services/jwt.service';
 import { AuthRequest } from '../types';
 
 export const authenticate: RequestHandler = (req, res, next) => {
@@ -13,7 +13,7 @@ export const authenticate: RequestHandler = (req, res, next) => {
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = verifyToken(token);
+    const decoded = verifyAccessToken(token);
     (req as AuthRequest).user = decoded;
     next();
   } catch {
