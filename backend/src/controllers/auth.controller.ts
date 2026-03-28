@@ -1,15 +1,14 @@
-import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { User } from '../models/User';
-import { generateTokens, generateAccessToken, verifyRefreshToken } from '../services/jwt.service';
-import { sendPasswordResetEmail } from '../services/email.service';
-import { RegisterDto, LoginDto, Role, AuthRequest } from '../types';
+import { Request, Response } from 'express';
 import { config } from '../config/env';
+import { User } from '../models/User';
+import { sendPasswordResetEmail } from '../services/email.service';
+import { generateAccessToken, generateTokens, verifyRefreshToken } from '../services/jwt.service';
+import { AuthRequest, LoginDto, RegisterDto, Role } from '../types';
 
-// Helper: trả về cả 2 token + lưu refreshToken vào DB
 const issueTokens = async (userId: string, email: string, role: Role) => {
-  const payload                   = { id: userId, email, role };
+  const payload = { id: userId, email, role };
   const { accessToken, refreshToken } = generateTokens(payload);
 
   await User.findByIdAndUpdate(userId, { refreshToken });
@@ -17,26 +16,45 @@ const issueTokens = async (userId: string, email: string, role: Role) => {
   return { accessToken, refreshToken };
 };
 
-// ─────────────────────────────────────────────────────────────
-
-// POST /api/auth/register
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const { username, email, password }: RegisterDto = req.body;
 
-    if (!username || !email || !password) {
+    if (!username?.trim() || !email?.trim() || !password) {
       res.status(400).json({ success: false, message: 'Vui lòng điền đầy đủ thông tin' });
       return;
     }
 
-    const existing = await User.findOne({ email: email.toLowerCase() });
-    if (existing) {
+    if (password.length < 6) {
+      res.status(400).json({ success: false, message: 'Mật khẩu phải có ít nhất 6 ký tự' });
+      return;
+    }
+
+    const normalizedUsername = username.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const [existingByEmail, existingByUsername] = await Promise.all([
+      User.findOne({ email: normalizedEmail }).lean(),
+      User.findOne({ username: normalizedUsername }).lean(),
+    ]);
+
+    if (existingByEmail) {
       res.status(400).json({ success: false, message: 'Email đã được sử dụng' });
       return;
     }
 
-    const hashed = await bcrypt.hash(password, 12);
-    const user   = await User.create({ username, email: email.toLowerCase(), password: hashed, hasPassword: true });
+    if (existingByUsername) {
+      res.status(400).json({ success: false, message: 'Tên đăng nhập đã được sử dụng' });
+      return;
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+    const user = await User.create({
+      username: normalizedUsername,
+      email: normalizedEmail,
+      password: hashedPassword,
+      hasPassword: true,
+    });
 
     const { accessToken, refreshToken } = await issueTokens(user._id.toString(), user.email, user.role);
 
@@ -46,25 +64,32 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       data: {
         accessToken,
         refreshToken,
-        user: { id: user._id, username: user.username, email: user.email, role: user.role, avatar: user.avatar },
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          avatar: user.avatar,
+          hasPassword: user.hasPassword,
+        },
       },
     });
-  } catch (err) {
-    res.status(500).json({ success: false, message: 'Lỗi server', data: err });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Lỗi server';
+    res.status(500).json({ success: false, message });
   }
 };
 
-// POST /api/auth/login
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password }: LoginDto = req.body;
+    const { email, password } = req.body as LoginDto & { email?: string };
 
-    if (!email || !password) {
+    if (!email?.trim() || !password) {
       res.status(400).json({ success: false, message: 'Vui lòng nhập email và mật khẩu' });
       return;
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    const user = await User.findOne({ email: email.trim().toLowerCase() }).select('+password');
     if (!user || !user.password) {
       res.status(401).json({ success: false, message: 'Email hoặc mật khẩu không đúng' });
       return;
@@ -75,8 +100,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) {
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
       res.status(401).json({ success: false, message: 'Email hoặc mật khẩu không đúng' });
       return;
     }
@@ -89,15 +114,22 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       data: {
         accessToken,
         refreshToken,
-        user: { id: user._id, username: user.username, email: user.email, role: user.role, avatar: user.avatar, hasPassword: user.hasPassword },
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          avatar: user.avatar,
+          hasPassword: user.hasPassword,
+        },
       },
     });
-  } catch (err) {
-    res.status(500).json({ success: false, message: 'Lỗi server', data: err });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Lỗi server';
+    res.status(500).json({ success: false, message });
   }
 };
 
-// POST /api/auth/refresh
 export const refresh = async (req: Request, res: Response): Promise<void> => {
   try {
     const { refreshToken } = req.body;
@@ -107,7 +139,6 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Verify chữ ký
     let decoded;
     try {
       decoded = verifyRefreshToken(refreshToken);
@@ -116,7 +147,6 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Kiểm tra token có khớp trong DB không (chống reuse sau logout)
     const user = await User.findById(decoded.id).select('+refreshToken');
     if (!user || user.refreshToken !== refreshToken) {
       res.status(401).json({ success: false, message: 'Refresh token không hợp lệ' });
@@ -128,73 +158,71 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Cấp access token mới (giữ nguyên refresh token)
-    const newAccessToken = generateAccessToken({ id: user._id.toString(), email: user.email, role: user.role });
+    const accessToken = generateAccessToken({ id: user._id.toString(), email: user.email, role: user.role });
 
     res.json({
       success: true,
       message: 'Token mới đã được cấp',
-      data: { accessToken: newAccessToken },
+      data: { accessToken },
     });
-  } catch (err) {
-    res.status(500).json({ success: false, message: 'Lỗi server', data: err });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Lỗi server';
+    res.status(500).json({ success: false, message });
   }
 };
 
-// POST /api/auth/logout
 export const logout = async (req: Request, res: Response): Promise<void> => {
   try {
     const { refreshToken } = req.body;
 
     if (refreshToken) {
-      // Xóa refresh token trong DB → token cũ không dùng được nữa
       await User.findOneAndUpdate({ refreshToken }, { $unset: { refreshToken: 1 } });
     }
 
     res.json({ success: true, message: 'Đăng xuất thành công' });
-  } catch (err) {
-    res.status(500).json({ success: false, message: 'Lỗi server', data: err });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Lỗi server';
+    res.status(500).json({ success: false, message });
   }
 };
 
-// POST /api/auth/forgot-password
 export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email } = req.body;
-    if (!email) {
+    if (!email?.trim()) {
       res.status(400).json({ success: false, message: 'Vui lòng nhập email' });
       return;
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
       res.json({ success: true, message: 'Nếu email tồn tại, link đặt lại mật khẩu đã được gửi' });
       return;
     }
 
     const token = crypto.randomBytes(32).toString('hex');
-    user.resetPasswordToken   = token;
+    user.resetPasswordToken = token;
     user.resetPasswordExpires = new Date(Date.now() + 3600000);
     await user.save();
 
     const resetUrl = `${config.clientUrl}/reset-password?token=${token}`;
 
     try {
-      await sendPasswordResetEmail(email, resetUrl);
+      await sendPasswordResetEmail(normalizedEmail, resetUrl);
     } catch {
-      // Email chưa cấu hình — vẫn trả success, log token ra console khi dev
       if (config.nodeEnv === 'development') {
         console.log(`[DEV] Reset URL: ${resetUrl}`);
       }
     }
 
     res.json({ success: true, message: 'Link đặt lại mật khẩu đã được gửi đến email của bạn' });
-  } catch (err) {
-    res.status(500).json({ success: false, message: 'Lỗi server', data: err });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Lỗi server';
+    res.status(500).json({ success: false, message });
   }
 };
 
-// POST /api/auth/reset-password
 export const resetPassword = async (req: Request, res: Response): Promise<void> => {
   try {
     const { token, password } = req.body;
@@ -203,28 +231,31 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    const user = await User.findOne({ resetPasswordToken: token, resetPasswordExpires: { $gt: new Date() } });
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: new Date() },
+    });
     if (!user) {
       res.status(400).json({ success: false, message: 'Token không hợp lệ hoặc đã hết hạn' });
       return;
     }
 
-    user.password             = await bcrypt.hash(password, 12);
-    user.hasPassword          = true;
-    user.resetPasswordToken   = undefined;
+    user.password = await bcrypt.hash(password, 12);
+    user.hasPassword = true;
+    user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
-    user.refreshToken         = undefined; // buộc đăng nhập lại
+    user.refreshToken = undefined;
     await user.save();
 
     res.json({ success: true, message: 'Đặt lại mật khẩu thành công, vui lòng đăng nhập lại' });
-  } catch (err) {
-    res.status(500).json({ success: false, message: 'Lỗi server', data: err });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Lỗi server';
+    res.status(500).json({ success: false, message });
   }
 };
 
-// GET /api/auth/google/callback
 export const googleCallback = async (req: Request, res: Response): Promise<void> => {
-  const u = (req as AuthRequest).user as { id: string; email: string; role: Role };
-  const { accessToken, refreshToken } = await issueTokens(u.id, u.email, u.role);
+  const user = (req as AuthRequest).user as { id: string; email: string; role: Role };
+  const { accessToken, refreshToken } = await issueTokens(user.id, user.email, user.role);
   res.redirect(`${config.clientUrl}/oauth2/callback?accessToken=${accessToken}&refreshToken=${refreshToken}`);
 };

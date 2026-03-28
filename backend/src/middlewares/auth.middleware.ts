@@ -1,8 +1,8 @@
 import { RequestHandler } from 'express';
+import { User } from '../models/User';
 import { verifyAccessToken } from '../services/jwt.service';
-import { AuthRequest } from '../types';
 
-export const authenticate: RequestHandler = (req, res, next) => {
+export const authenticate: RequestHandler = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -14,7 +14,23 @@ export const authenticate: RequestHandler = (req, res, next) => {
 
   try {
     const decoded = verifyAccessToken(token);
-    (req as AuthRequest).user = decoded;
+    const user = await User.findById(decoded.id).lean();
+
+    if (!user) {
+      res.status(401).json({ success: false, message: 'User not found' });
+      return;
+    }
+
+    if (user.banned) {
+      res.status(403).json({ success: false, message: 'Tài khoản của bạn đã bị khóa' });
+      return;
+    }
+
+    req.user = {
+      id: user._id.toString(),
+      email: user.email,
+      role: user.role,
+    };
     next();
   } catch {
     res.status(401).json({ success: false, message: 'Invalid or expired token' });
