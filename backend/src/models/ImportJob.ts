@@ -1,8 +1,8 @@
 import mongoose, { Schema } from 'mongoose';
-import { IBaseDocument, ImportJobStatus } from '../types';
+import { ImportJobStatus } from '../types';
 
 // MODEL 11: ImportJob (batch product import tracking)
-export interface IImportJob extends IBaseDocument {
+export interface IImportJob {
   adminId: string;
   filename: string;
   status: ImportJobStatus;

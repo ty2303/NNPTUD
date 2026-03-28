@@ -54,13 +54,7 @@ export interface IBaseDocument extends Document {
 // ========================
 // Auth Types
 // ========================
-export interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    email: string;
-    role: Role;
-  };
-}
+export type AuthRequest = Request;
 
 export interface JwtPayload {
   id: string;
@@ -69,7 +63,7 @@ export interface JwtPayload {
 }
 
 export interface LoginDto {
-  email: string;
+  username: string;
   password: string;
 }
 
