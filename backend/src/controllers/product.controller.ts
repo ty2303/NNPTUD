@@ -311,6 +311,24 @@ const resolveSort = (sortBy: unknown, order: unknown): Record<string, 1 | -1> =>
   return { [safeSortBy]: safeOrder };
 };
 
+const normalizeProduct = (product: unknown): Record<string, unknown> => {
+  const plainProduct = typeof (product as { toObject?: () => unknown }).toObject === 'function'
+    ? ((product as { toObject: () => unknown }).toObject() as Record<string, unknown>)
+    : (product as Record<string, unknown>);
+
+  const rawId = plainProduct._id;
+  const id = typeof rawId === 'string'
+    ? rawId
+    : rawId && typeof rawId === 'object' && 'toString' in rawId
+      ? (rawId as { toString(): string }).toString()
+      : '';
+
+  return {
+    ...plainProduct,
+    id,
+  };
+};
+
 export const getProducts = async (req: Request, res: Response): Promise<void> => {
   try {
     const page = Math.max(toNumber(req.query.page) ?? 1, 1);
@@ -328,11 +346,11 @@ export const getProducts = async (req: Request, res: Response): Promise<void> =>
       success: true,
       message: 'Products fetched successfully',
       data: {
-        data: products,
-        total,
-        page,
-        limit,
+        content: products.map((product) => normalizeProduct(product)),
+        number: page - 1,
+        size: limit,
         totalPages: Math.ceil(total / limit) || 1,
+        totalElements: total,
       },
     });
   } catch (error) {
@@ -357,7 +375,7 @@ export const getProductById = async (req: Request, res: Response): Promise<void>
     res.status(200).json({
       success: true,
       message: 'Product fetched successfully',
-      data: product,
+      data: normalizeProduct(product),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to fetch product';
@@ -405,7 +423,7 @@ export const createProduct = async (req: AuthRequest, res: Response): Promise<vo
     res.status(201).json({
       success: true,
       message: 'Product created successfully',
-      data: product,
+      data: normalizeProduct(product),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create product';
@@ -462,7 +480,7 @@ export const updateProduct = async (req: AuthRequest, res: Response): Promise<vo
     res.status(200).json({
       success: true,
       message: 'Product updated successfully',
-      data: product,
+      data: normalizeProduct(product),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to update product';

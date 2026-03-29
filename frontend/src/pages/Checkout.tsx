@@ -7,15 +7,19 @@ import {
   Truck,
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 
-import apiClient from '@/api/client';
-import { ENDPOINTS } from '@/api/endpoints';
+import {
+  cancelCheckoutSession,
+  confirmCheckoutSession,
+  createCheckoutSession,
+  getCheckoutSession,
+  saveCheckoutCleanup,
+} from '@/services/checkout.service';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
-import type { ApiResponse } from '@/api/types';
-import type { CreateOrderPayload, Order } from '@/types/order';
+import type { CheckoutSession } from '@/types/order';
 
 export const Component = Checkout;
 
@@ -26,21 +30,92 @@ const inputClass =
 
 function Checkout() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const items = useCartStore((s) => s.items);
-  const totalPrice = useCartStore((s) => s.totalPrice());
-  const clear = useCartStore((s) => s.clear);
+  const removeItems = useCartStore((s) => s.removeItems);
   const { user } = useAuthStore();
-  const idempotencyKeyRef = useRef(
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-  );
+  const activeSessionIdRef = useRef<string | null>(null);
+  const shouldCancelOnLeaveRef = useRef(true);
 
   const [loading, setLoading] = useState(false);
+  const [sessionLoading, setSessionLoading] = useState(true);
   const [error, setError] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('COD');
+  const [checkoutSession, setCheckoutSession] =
+    useState<CheckoutSession | null>(null);
+  const [now, setNow] = useState(Date.now());
 
-  if (items.length === 0) {
+  const sessionId = searchParams.get('session');
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const loadCheckoutSession = async () => {
+      setSessionLoading(true);
+      setError('');
+
+      try {
+        if (sessionId) {
+          const session = await getCheckoutSession(sessionId);
+          activeSessionIdRef.current = session.id;
+          setCheckoutSession(session);
+          return;
+        }
+
+        if (items.length === 0) {
+          setCheckoutSession(null);
+          return;
+        }
+
+        const session = await createCheckoutSession({
+          source: 'CART',
+          items: items.map((item) => ({
+            productId: item.product.id,
+            quantity: item.quantity,
+          })),
+        });
+        activeSessionIdRef.current = session.id;
+        setCheckoutSession(session);
+        setSearchParams({ session: session.id }, { replace: true });
+      } catch (err: unknown) {
+        const axiosErr = err as { response?: { data?: { message?: string } } };
+        setCheckoutSession(null);
+        setError(
+          axiosErr.response?.data?.message ??
+            'Không thể chuẩn bị phiên thanh toán.',
+        );
+      } finally {
+        setSessionLoading(false);
+      }
+    };
+
+    void loadCheckoutSession();
+  }, [items, sessionId, setSearchParams]);
+
+  useEffect(() => {
+    return () => {
+      if (shouldCancelOnLeaveRef.current && activeSessionIdRef.current) {
+        void cancelCheckoutSession(activeSessionIdRef.current).catch(() =>
+          undefined,
+        );
+      }
+    };
+  }, []);
+
+  const sessionItems = checkoutSession?.items ?? [];
+  const subtotal = checkoutSession?.subtotal ?? 0;
+  const shippingFee = checkoutSession?.shippingFee ?? 0;
+  const total = checkoutSession?.total ?? 0;
+  const remainingMs = checkoutSession
+    ? new Date(checkoutSession.expiresAt).getTime() - now
+    : 0;
+  const remainingMinutes = Math.max(Math.floor(remainingMs / 60000), 0);
+  const remainingSeconds = Math.max(Math.floor((remainingMs % 60000) / 1000), 0);
+
+  if (!sessionLoading && !checkoutSession && items.length === 0) {
     return (
       <section className="flex min-h-[60vh] flex-col items-center justify-center px-6 text-center">
         <h2 className="font-display text-2xl font-bold text-text-primary">
@@ -56,57 +131,81 @@ function Checkout() {
     );
   }
 
-  const shippingFee = totalPrice >= 500000 ? 0 : 30000;
-  const total = totalPrice + shippingFee;
+  if (!sessionLoading && !checkoutSession) {
+    return (
+      <section className="flex min-h-[60vh] flex-col items-center justify-center px-6 text-center">
+        <h2 className="font-display text-2xl font-bold text-text-primary">
+          Không thể mở phiên thanh toán
+        </h2>
+        <p className="mt-2 max-w-md text-text-secondary">
+          {error || 'Phiên thanh toán hiện không khả dụng. Vui lòng thử lại.'}
+        </p>
+        <Link to="/cart" className="btn-primary mt-6 no-underline">
+          Quay lại giỏ hàng
+        </Link>
+      </section>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!checkoutSession || !activeSessionIdRef.current) return;
+
     setError('');
     setLoading(true);
 
     const fd = new FormData(e.currentTarget);
 
-    const payload: CreateOrderPayload = {
-      email: fd.get('email') as string,
-      customerName: fd.get('name') as string,
-      phone: fd.get('phone') as string,
-      address: fd.get('address') as string,
-      city: fd.get('city') as string,
-      district: fd.get('district') as string,
-      ward: fd.get('ward') as string,
-      note: (fd.get('note') as string) || undefined,
-      idempotencyKey: idempotencyKeyRef.current,
-      paymentMethod,
-      items: items.map(({ product, quantity }) => ({
-        productId: product.id,
-        productName: product.name,
-        productImage: product.image,
-        brand: product.brand,
-        price: product.price,
-        quantity,
-      })),
-    };
-
     try {
-      const res = await apiClient.post<ApiResponse<Order>>(
-        ENDPOINTS.ORDERS.BASE,
-        payload,
+      shouldCancelOnLeaveRef.current = false;
+      const result = await confirmCheckoutSession(
+        activeSessionIdRef.current,
+        {
+          email: fd.get('email') as string,
+          customerName: fd.get('name') as string,
+          phone: fd.get('phone') as string,
+          address: fd.get('address') as string,
+          city: fd.get('city') as string,
+          district: fd.get('district') as string,
+          ward: fd.get('ward') as string,
+          note: (fd.get('note') as string) || undefined,
+          paymentMethod,
+        },
       );
-      const orderId = res.data.data.id;
+      const orderId = result.order.id;
+      const purchasedProductIds = checkoutSession.items.map(
+        (item) => item.productId,
+      );
 
       if (paymentMethod === 'MOMO') {
-        // Get MoMo payment URL then redirect browser to it
-        const momoRes = await apiClient.post<ApiResponse<{ payUrl: string }>>(
-          ENDPOINTS.MOMO.CREATE(orderId),
-        );
-        window.location.href = momoRes.data.data.payUrl;
+        saveCheckoutCleanup(orderId, {
+          source: checkoutSession.source,
+          productIds: purchasedProductIds,
+        });
+        if (checkoutSession.source === 'CART') {
+          removeItems(purchasedProductIds);
+        }
+        navigate('/checkout/pending', {
+          state: {
+            fromCheckout: true,
+            orderId,
+          },
+        });
       } else {
-        clear();
+        if (checkoutSession.source === 'CART') {
+          removeItems(purchasedProductIds);
+        }
         navigate('/checkout/success', {
-          state: { fromCheckout: true, orderId },
+          state: {
+            fromCheckout: true,
+            orderId,
+            checkoutSource: checkoutSession.source,
+            purchasedProductIds,
+          },
         });
       }
     } catch (err: unknown) {
+      shouldCancelOnLeaveRef.current = true;
       const axiosErr = err as { response?: { data?: { message?: string } } };
       setError(
         axiosErr.response?.data?.message ??
@@ -131,6 +230,11 @@ function Checkout() {
         <h1 className="mt-4 font-display text-3xl font-bold text-text-primary lg:text-4xl">
           Thanh toán
         </h1>
+        {checkoutSession && (
+          <p className="mt-2 text-sm text-text-muted">
+            Giá được giữ trong {remainingMinutes}:{`${remainingSeconds}`.padStart(2, '0')}
+          </p>
+        )}
       </div>
 
       <div className="grid gap-12 lg:grid-cols-12">
@@ -140,12 +244,17 @@ function Checkout() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
           className="lg:col-span-7"
-        >
-          <form
-            id="checkout-form"
-            onSubmit={handleSubmit}
-            className="space-y-8"
           >
+            {sessionLoading ? (
+              <div className="flex min-h-[30rem] items-center justify-center rounded-2xl border border-border bg-surface">
+                <Loader2 className="h-6 w-6 animate-spin text-text-muted" />
+              </div>
+            ) : (
+              <form
+                id="checkout-form"
+                onSubmit={handleSubmit}
+                className="space-y-8"
+              >
             {/* Contact Info */}
             <section className="space-y-4">
               <h2 className="flex items-center gap-2 font-display text-xl font-semibold text-text-primary">
@@ -366,12 +475,13 @@ function Checkout() {
               />
             </section>
 
-            {error && (
-              <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
-                {error}
-              </p>
+                {error && (
+                  <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
+                    {error}
+                  </p>
+                )}
+              </form>
             )}
-          </form>
         </motion.div>
 
         {/* ── Right Column: Order Summary ── */}
@@ -388,24 +498,26 @@ function Checkout() {
 
             {/* Product list */}
             <div className="max-h-72 space-y-4 overflow-y-auto pr-1">
-              {items.map(({ product, quantity }) => (
-                <div key={product.id} className="flex gap-4">
+              {sessionItems.map((item) => (
+                <div key={`${item.productId}-${item.color ?? ''}-${item.storage ?? ''}`} className="flex gap-4">
                   <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-lg border border-border bg-surface-alt p-1">
                     <img
-                      src={product.image}
-                      alt={product.name}
+                      src={item.productImage}
+                      alt={item.productName}
                       className="h-full w-auto object-contain"
                     />
                   </div>
                   <div className="min-w-0 flex-1">
                     <h4 className="line-clamp-1 text-sm font-medium text-text-primary">
-                      {product.name}
+                      {item.productName}
                     </h4>
                     <p className="text-xs text-text-muted">
-                      Số lượng: {quantity}
+                      Số lượng: {item.quantity}
+                      {item.color ? ` · ${item.color}` : ''}
+                      {item.storage ? ` · ${item.storage}` : ''}
                     </p>
                     <p className="text-sm font-semibold text-brand">
-                      {(product.price * quantity).toLocaleString('vi-VN')}₫
+                      {(item.price * item.quantity).toLocaleString('vi-VN')}₫
                     </p>
                   </div>
                 </div>
@@ -417,7 +529,7 @@ function Checkout() {
               <div className="flex justify-between text-sm">
                 <span className="text-text-secondary">Tạm tính</span>
                 <span className="font-medium text-text-primary">
-                  {totalPrice.toLocaleString('vi-VN')}₫
+                  {subtotal.toLocaleString('vi-VN')}₫
                 </span>
               </div>
               <div className="flex justify-between text-sm">
@@ -444,12 +556,12 @@ function Checkout() {
             </div>
 
             {/* Submit */}
-            <button
-              type="submit"
-              form="checkout-form"
-              disabled={loading}
-              className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-brand py-4 font-display text-sm font-bold text-white transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
-            >
+              <button
+                type="submit"
+                form="checkout-form"
+                disabled={loading || sessionLoading || remainingMs <= 0 || !checkoutSession}
+                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-brand py-4 font-display text-sm font-bold text-white transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
+              >
               {loading ? (
                 <>
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -458,9 +570,15 @@ function Checkout() {
               ) : (
                 'Đặt hàng ngay'
               )}
-            </button>
+              </button>
 
-            <p className="text-center text-xs text-text-muted">
+              {remainingMs <= 0 && checkoutSession && (
+                <p className="text-center text-xs text-red-500">
+                  Phiên thanh toán đã hết hạn. Vui lòng quay lại và thử lại.
+                </p>
+              )}
+
+              <p className="text-center text-xs text-text-muted">
               Bằng việc đặt hàng, bạn đồng ý với điều khoản dịch vụ và chính
               sách bảo mật của chúng tôi.
             </p>

@@ -11,6 +11,7 @@ import uploadRoutes       from './upload.routes';
 import voucherRoutes      from './voucher.routes';
 import notificationRoutes from './notification.routes';
 import addressRoutes      from './address.routes';
+import checkoutSessionRoutes from './checkout-session.routes';
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use('/upload',        uploadRoutes);
 router.use('/vouchers',      voucherRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/addresses',     addressRoutes);
+router.use('/checkout-sessions', checkoutSessionRoutes);
 
 export default router;

@@ -31,6 +31,7 @@ const OrderItemSchema = new Schema<IOrderItem>({
   productId:    { type: String, required: true },
   productName:  { type: String, required: true },
   productImage: { type: String, default: '' },
+  brand:        { type: String },
   color:        { type: String },
   storage:      { type: String },
   price:        { type: Number, required: true },

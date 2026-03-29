@@ -37,6 +37,7 @@ interface CartState {
 
   addItem: (product: Product) => Promise<void>;
   removeItem: (productId: string) => void;
+  removeItems: (productIds: string[]) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   clear: () => void;
 
@@ -118,8 +119,13 @@ export const useCartStore = create<CartState>()(
           .delete<ApiResponse<ServerCartResponse>>(
             ENDPOINTS.CART.ITEM(productId),
           )
-          .then((res) => set({ items: res.data.data.items.map(fromServer) }))
-          .catch(() => set({ items: prev }));
+            .then((res) => set({ items: res.data.data.items.map(fromServer) }))
+            .catch(() => set({ items: prev }));
+      },
+
+      removeItems: (productIds) => {
+        const idSet = new Set(productIds);
+        set({ items: get().items.filter((item) => !idSet.has(item.product.id)) });
       },
 
       updateQuantity: (productId, quantity) => {

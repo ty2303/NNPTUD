@@ -72,6 +72,10 @@ export const router = createBrowserRouter([
                 lazy: () => import('@/pages/CheckoutResult'),
               },
               {
+                path: 'checkout/pending',
+                lazy: () => import('@/pages/CheckoutPending'),
+              },
+              {
                 path: 'profile',
                 children: [
                   {

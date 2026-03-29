@@ -75,16 +75,28 @@ export const setupPassword = async (req: Request, res: Response): Promise<void> 
 // GET /api/users  (admin)
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { page = 1, limit = 10, search } = req.query;
+    const page = Math.max(Number(req.query.page ?? 1), 1);
+    const size = Math.min(Math.max(Number(req.query.size ?? req.query.limit ?? 10), 1), 100);
+    const { search } = req.query;
     const query = search
       ? { $or: [{ username: { $regex: String(search), $options: 'i' } }, { email: { $regex: String(search), $options: 'i' } }] }
       : {};
 
     const [users, total] = await Promise.all([
-      User.find(query).sort({ createdAt: -1 }).skip((+page - 1) * +limit).limit(+limit),
+      User.find(query).sort({ createdAt: -1 }).skip((page - 1) * size).limit(size),
       User.countDocuments(query),
     ]);
-    res.json({ success: true, message: 'OK', data: { users, total, page: +page, limit: +limit, totalPages: Math.ceil(total / +limit) } });
+    res.json({
+      success: true,
+      message: 'OK',
+      data: {
+        content: users,
+        number: page - 1,
+        size,
+        totalPages: Math.ceil(total / size) || 1,
+        totalElements: total,
+      },
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Lỗi server', data: err });
   }

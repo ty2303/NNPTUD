@@ -3,21 +3,25 @@ import { motion } from 'motion/react';
 import { useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router';
 
+import { consumeCheckoutCleanup } from '@/services/checkout.service';
 import { useCartStore } from '@/store/useCartStore';
 
 export const Component = CheckoutResult;
 
 function CheckoutResult() {
   const [searchParams] = useSearchParams();
-  const clear = useCartStore((s) => s.clear);
+  const removeItems = useCartStore((s) => s.removeItems);
   const success = searchParams.get('success') === 'true';
   const orderId = searchParams.get('orderId') ?? 'N/A';
 
   useEffect(() => {
     if (success) {
-      clear();
+      const cleanupInfo = consumeCheckoutCleanup(orderId);
+      if (cleanupInfo?.source === 'CART') {
+        removeItems(cleanupInfo.productIds);
+      }
     }
-  }, [clear, success]);
+  }, [orderId, removeItems, success]);
 
   if (success) {
     return (

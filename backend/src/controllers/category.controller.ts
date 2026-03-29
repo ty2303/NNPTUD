@@ -22,6 +22,24 @@ const isDuplicateKeyError = (error: unknown): boolean => {
   return 'code' in error && error.code === 11000;
 };
 
+const normalizeCategory = (category: unknown): Record<string, unknown> => {
+  const plainCategory = typeof (category as { toObject?: () => unknown }).toObject === 'function'
+    ? ((category as { toObject: () => unknown }).toObject() as Record<string, unknown>)
+    : (category as Record<string, unknown>);
+
+  const rawId = plainCategory._id;
+  const id = typeof rawId === 'string'
+    ? rawId
+    : rawId && typeof rawId === 'object' && 'toString' in rawId
+      ? (rawId as { toString(): string }).toString()
+      : '';
+
+  return {
+    ...plainCategory,
+    id,
+  };
+};
+
 export const getCategories = async (req: Request, res: Response): Promise<void> => {
   try {
     const includeProductCount = req.query.includeProductCount === 'true';
@@ -31,14 +49,14 @@ export const getCategories = async (req: Request, res: Response): Promise<void> 
       res.status(200).json({
         success: true,
         message: 'Categories fetched successfully',
-        data: categories,
+        data: categories.map((category) => normalizeCategory(category)),
       });
       return;
     }
 
     const categoriesWithCount = await Promise.all(
       categories.map(async (category) => ({
-        ...category,
+        ...normalizeCategory(category),
         productCount: await Product.countDocuments({ categoryId: category._id.toString(), isActive: true }),
       }))
     );
@@ -70,7 +88,7 @@ export const getCategoryById = async (req: Request, res: Response): Promise<void
     res.status(200).json({
       success: true,
       message: 'Category fetched successfully',
-      data: category,
+      data: normalizeCategory(category),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to fetch category';
@@ -103,7 +121,7 @@ export const createCategory = async (req: AuthRequest, res: Response): Promise<v
     res.status(201).json({
       success: true,
       message: 'Category created successfully',
-      data: category,
+      data: normalizeCategory(category),
     });
   } catch (error) {
     if (isDuplicateKeyError(error)) {
@@ -165,7 +183,7 @@ export const updateCategory = async (req: AuthRequest, res: Response): Promise<v
     res.status(200).json({
       success: true,
       message: 'Category updated successfully',
-      data: category,
+      data: normalizeCategory(category),
     });
   } catch (error) {
     if (isDuplicateKeyError(error)) {
