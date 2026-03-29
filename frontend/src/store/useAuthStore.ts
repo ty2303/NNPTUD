@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -8,39 +9,52 @@ export interface AuthUser {
   username: string;
   email: string;
   role: 'USER' | 'ADMIN';
+  avatar?: string;
+  hasPassword?: boolean;
 }
 
 interface AuthState {
-  token: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
   user: AuthUser | null;
   isLoggedIn: boolean;
   isAdmin: boolean;
-  login: (token: string, user: AuthUser) => void;
+  login: (accessToken: string, refreshToken: string, user: AuthUser) => void;
   logout: () => void;
+  setAccessToken: (accessToken: string) => void;
   syncRole: (role: 'USER' | 'ADMIN') => void;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      token: null,
+      accessToken: null,
+      refreshToken: null,
       user: null,
       isLoggedIn: false,
       isAdmin: false,
 
-      login: (token, user) => {
+      login: (accessToken, refreshToken, user) => {
         // Clear cart if a different user is logging in (e.g., user switches account)
         const currentUser = get().user;
         if (currentUser && currentUser.id !== user.id) {
           useCartStore.getState().clear();
         }
-        set({ token, user, isLoggedIn: true, isAdmin: user.role === 'ADMIN' });
+        set({ accessToken, refreshToken, user, isLoggedIn: true, isAdmin: user.role === 'ADMIN' });
       },
 
       logout: () => {
+        const { refreshToken } = get();
+        // Best-effort call to backend to invalidate the refresh token
+        if (refreshToken) {
+          const baseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api';
+          axios.post(`${baseUrl}/auth/logout`, { refreshToken }).catch(() => {});
+        }
         useCartStore.getState().clear();
-        set({ token: null, user: null, isLoggedIn: false, isAdmin: false });
+        set({ accessToken: null, refreshToken: null, user: null, isLoggedIn: false, isAdmin: false });
       },
+
+      setAccessToken: (accessToken) => set({ accessToken }),
 
       syncRole: (role) =>
         set((state) => ({
@@ -48,6 +62,6 @@ export const useAuthStore = create<AuthState>()(
           isAdmin: role === 'ADMIN',
         })),
     }),
-    { name: 'nebula-auth', version: 1 },
+    { name: 'nebula-auth', version: 2 },
   ),
 );

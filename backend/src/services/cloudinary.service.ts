@@ -1,4 +1,5 @@
-// TODO: implement Cloudinary upload service
+import streamifier from 'streamifier';
+import cloudinary from '../config/cloudinary';
 
 // Upload single image buffer to Cloudinary
 // Returns: { url: string, publicId: string }
@@ -6,11 +7,39 @@ export const uploadToCloudinary = (
   buffer: Buffer,
   folder: string = 'nnptud'
 ): Promise<{ url: string; publicId: string }> => {
-  // TODO: use cloudinary.uploader.upload_stream with streamifier
-  return Promise.resolve({ url: '', publicId: '' });
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        resource_type: 'image',
+      },
+      (error, result) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        if (!result?.secure_url || !result.public_id) {
+          reject(new Error('Cloudinary upload did not return expected data'));
+          return;
+        }
+
+        resolve({
+          url: result.secure_url,
+          publicId: result.public_id,
+        });
+      }
+    );
+
+    streamifier.createReadStream(buffer).pipe(uploadStream);
+  });
 };
 
 // Delete image from Cloudinary by publicId
 export const deleteFromCloudinary = async (publicId: string): Promise<void> => {
-  // TODO: use cloudinary.uploader.destroy(publicId)
+  const result = await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+
+  if (result.result !== 'ok' && result.result !== 'not found') {
+    throw new Error(`Failed to delete Cloudinary asset: ${result.result}`);
+  }
 };

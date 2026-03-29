@@ -1,16 +1,21 @@
-import { Response, NextFunction } from 'express';
-import { AuthRequest, Role } from '../types';
+import { RequestHandler } from 'express';
+import { Role } from '../types';
 
-// Middleware: kiểm tra role của user
-export const requireRole = (...roles: Role[]) => {
-  return (req: AuthRequest, res: Response, next: NextFunction): void => {
-    // TODO: implement role authorization middleware
-    // 1. Kiểm tra req.user có tồn tại không
-    // 2. Kiểm tra req.user.role có nằm trong danh sách roles không
-    // 3. Gọi next() nếu có quyền, trả 403 nếu không
+export const requireRole = (...roles: Role[]): RequestHandler => {
+  return (req, res, next) => {
+    if (!req.user) {
+      res.status(401).json({ success: false, message: 'Unauthorized' });
+      return;
+    }
+
+    if (!roles.includes(req.user.role)) {
+      res.status(403).json({ success: false, message: 'Forbidden: insufficient permissions' });
+      return;
+    }
+
+    next();
   };
 };
 
-// Shortcut middlewares
 export const requireAdmin = requireRole(Role.ADMIN);
-export const requireUser  = requireRole(Role.USER, Role.ADMIN);
+export const requireUser = requireRole(Role.USER, Role.ADMIN);

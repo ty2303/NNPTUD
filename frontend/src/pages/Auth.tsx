@@ -9,12 +9,19 @@ import { useAuthStore, type AuthUser } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
 import { useWishlistStore } from '@/store/useWishlistStore';
 
-interface AuthResponse {
-  token: string;
+interface BackendUser {
   id: string;
   username: string;
   email: string;
   role: 'USER' | 'ADMIN';
+  avatar?: string;
+  hasPassword?: boolean;
+}
+
+interface AuthResponse {
+  accessToken: string;
+  refreshToken: string;
+  user: BackendUser;
 }
 
 export function Component() {
@@ -41,23 +48,27 @@ export function Component() {
     try {
       const endpoint = isLogin ? ENDPOINTS.AUTH.LOGIN : ENDPOINTS.AUTH.REGISTER;
       const body = isLogin
-        ? { username, password }
+        ? { email, password }
         : { username, email, password };
-      const res = await apiClient.post<ApiResponse<AuthResponse>>(
-        endpoint,
-        body,
-      );
-      const { token, ...user } = res.data.data;
-      login(token, user as AuthUser);
+      const res = await apiClient.post<ApiResponse<AuthResponse>>(endpoint, body);
+      const { accessToken, refreshToken, user } = res.data.data;
+      const authUser: AuthUser = {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        avatar: user.avatar,
+        hasPassword: user.hasPassword,
+      };
+      login(accessToken, refreshToken, authUser);
       // Merge guest cart into server cart, then fetch wishlist — both fire in parallel
       useCartStore.getState().mergeOnLogin();
       useWishlistStore.getState().fetch();
-      navigate(user.role === 'ADMIN' ? '/admin' : '/');
+      navigate(authUser.role === 'ADMIN' ? '/admin' : '/');
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
       setError(
-        axiosErr.response?.data?.message ??
-          'Đã có lỗi xảy ra, vui lòng thử lại',
+        axiosErr.response?.data?.message ?? 'Đã có lỗi xảy ra, vui lòng thử lại',
       );
     } finally {
       setLoading(false);
@@ -116,33 +127,11 @@ export function Component() {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Username - always visible */}
-            <div className="space-y-1">
-              <label
-                htmlFor="username"
-                className="text-xs font-medium text-text-secondary"
-              >
-                Tên đăng nhập
-              </label>
-              <div className="relative">
-                <User className="pointer-events-none absolute top-2.5 left-3 h-5 w-5 text-text-muted" />
-                <input
-                  id="username"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-surface px-10 py-2.5 text-sm outline-none transition-colors focus:border-brand focus:ring-1 focus:ring-brand"
-                  placeholder="username123"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Email - only for register */}
+            {/* Username - only for register */}
             <AnimatePresence mode="popLayout">
               {!isLogin && (
                 <motion.div
-                  key="email-field"
+                  key="username-field"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
@@ -150,20 +139,20 @@ export function Component() {
                 >
                   <div className="space-y-1">
                     <label
-                      htmlFor="email"
+                      htmlFor="username"
                       className="text-xs font-medium text-text-secondary"
                     >
-                      Email
+                      Tên đăng nhập
                     </label>
                     <div className="relative">
-                      <Mail className="pointer-events-none absolute top-2.5 left-3 h-5 w-5 text-text-muted" />
+                      <User className="pointer-events-none absolute top-2.5 left-3 h-5 w-5 text-text-muted" />
                       <input
-                        id="email"
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        id="username"
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
                         className="w-full rounded-lg border border-border bg-surface px-10 py-2.5 text-sm outline-none transition-colors focus:border-brand focus:ring-1 focus:ring-brand"
-                        placeholder="email@example.com"
+                        placeholder="username123"
                         required
                       />
                     </div>
@@ -171,6 +160,28 @@ export function Component() {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* Email - always visible */}
+            <div className="space-y-1">
+              <label
+                htmlFor="email"
+                className="text-xs font-medium text-text-secondary"
+              >
+                Email
+              </label>
+              <div className="relative">
+                <Mail className="pointer-events-none absolute top-2.5 left-3 h-5 w-5 text-text-muted" />
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-surface px-10 py-2.5 text-sm outline-none transition-colors focus:border-brand focus:ring-1 focus:ring-brand"
+                  placeholder="email@example.com"
+                  required
+                />
+              </div>
+            </div>
 
             <div className="space-y-1">
               <label
@@ -284,7 +295,11 @@ export function Component() {
               type="button"
               className="btn-outline flex w-full cursor-pointer items-center justify-center gap-2 transition-all hover:bg-surface-alt"
               onClick={() => {
-                window.location.href = `${import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8080'}/oauth2/authorization/google`;
+                const backendUrl =
+                  import.meta.env.VITE_BACKEND_URL ??
+                  import.meta.env.VITE_API_BASE_URL?.replace(/\/api$/, '') ??
+                  'http://localhost:8080';
+                window.location.href = `${backendUrl}/api/auth/google`;
               }}
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24">

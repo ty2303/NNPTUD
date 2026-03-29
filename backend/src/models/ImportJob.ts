@@ -1,15 +1,15 @@
 import mongoose, { Schema } from 'mongoose';
-import { IBaseDocument, ImportJobStatus } from '../types';
+import { ImportJobStatus } from '../types';
 
 // MODEL 11: ImportJob (batch product import tracking)
-export interface IImportJob extends IBaseDocument {
+export interface IImportJob {
   adminId: string;
   filename: string;
   status: ImportJobStatus;
   totalRows: number;
   successCount: number;
   failCount: number;
-  errors: { row: number; message: string }[];
+  importErrors: { row: number; message: string }[];
   completedAt?: Date;
 }
 
@@ -21,7 +21,7 @@ const ImportJobSchema = new Schema<IImportJob>(
     totalRows:    { type: Number, default: 0 },
     successCount: { type: Number, default: 0 },
     failCount:    { type: Number, default: 0 },
-    errors: [
+    importErrors: [
       {
         row:     { type: Number },
         message: { type: String },

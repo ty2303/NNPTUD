@@ -6,6 +6,8 @@ const router = Router();
 
 router.post('/register',        authCtrl.register);
 router.post('/login',           authCtrl.login);
+router.post('/refresh',         authCtrl.refresh);
+router.post('/logout',          authCtrl.logout);
 router.post('/forgot-password', authCtrl.forgotPassword);
 router.post('/reset-password',  authCtrl.resetPassword);
 

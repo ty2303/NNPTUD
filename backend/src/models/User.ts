@@ -13,6 +13,7 @@ export interface IUser extends IBaseDocument {
   banned: boolean;
   resetPasswordToken?: string;
   resetPasswordExpires?: Date;
+  refreshToken?: string;
 }
 
 const UserSchema = new Schema<IUser>(
@@ -27,6 +28,7 @@ const UserSchema = new Schema<IUser>(
     banned:                { type: Boolean, default: false },
     resetPasswordToken:    { type: String },
     resetPasswordExpires:  { type: Date },
+    refreshToken:          { type: String, select: false },
   },
   { timestamps: true }
 );
