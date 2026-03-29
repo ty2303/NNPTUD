@@ -91,6 +91,7 @@ export interface IOrderItem {
   productId: string;
   productName: string;
   productImage: string;
+  brand?: string;
   color?: string;
   storage?: string;
   price: number;
@@ -104,6 +105,7 @@ export interface ICartItem {
   productId: string;
   productName: string;
   productImage: string;
+  brand?: string;
   color?: string;
   storage?: string;
   price: number;

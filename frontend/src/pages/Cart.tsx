@@ -8,19 +8,26 @@ import {
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Link } from 'react-router';
 
+import { createCheckoutSession } from '@/services/checkout.service';
 import { MAX_QUANTITY, useCartStore } from '@/store/useCartStore';
+import { useToastStore } from '@/store/useToastStore';
 
 export const Component = Cart;
 
 function Cart() {
+  const navigate = useNavigate();
+  const addToast = useToastStore((s) => s.addToast);
   const items = useCartStore((s) => s.items);
   const removeItem = useCartStore((s) => s.removeItem);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const clear = useCartStore((s) => s.clear);
   const totalPrice = useCartStore((s) => s.totalPrice());
   const totalItems = useCartStore((s) => s.totalItems());
+  const [startingCheckout, setStartingCheckout] = useState(false);
 
   const shippingFee = totalPrice >= 500000 ? 0 : 30000;
   const grandTotal = totalPrice + shippingFee;
@@ -30,6 +37,31 @@ function Cart() {
       window.confirm('Bạn có chắc muốn xóa tất cả sản phẩm trong giỏ hàng?')
     ) {
       clear();
+    }
+  };
+
+  const handleCheckout = async () => {
+    if (items.length === 0 || startingCheckout) return;
+
+    setStartingCheckout(true);
+    try {
+      const session = await createCheckoutSession({
+        source: 'CART',
+        items: items.map((item) => ({
+          productId: item.product.id,
+          quantity: item.quantity,
+        })),
+      });
+      navigate(`/checkout?session=${session.id}`);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      addToast(
+        'error',
+        axiosErr.response?.data?.message ??
+          'Không thể khởi tạo phiên thanh toán.',
+      );
+    } finally {
+      setStartingCheckout(false);
     }
   };
 
@@ -239,13 +271,19 @@ function Cart() {
                 </span>
               </div>
 
-              <Link
-                to="/checkout"
+              <button
+                type="button"
+                onClick={handleCheckout}
+                disabled={startingCheckout}
                 className="group relative mt-6 flex w-full items-center justify-center gap-3 overflow-hidden rounded-xl bg-brand py-4 text-center font-display text-sm font-bold tracking-wide text-white no-underline shadow-lg transition-all hover:shadow-xl hover:-translate-y-0.5"
               >
-                <span>Tiến hành thanh toán</span>
+                <span>
+                  {startingCheckout
+                    ? 'Đang chuẩn bị thanh toán...'
+                    : 'Tiến hành thanh toán'}
+                </span>
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </Link>
+              </button>
 
               <Link
                 to="/products"

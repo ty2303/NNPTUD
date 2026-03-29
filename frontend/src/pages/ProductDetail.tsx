@@ -21,8 +21,10 @@ import apiClient from '@/api/client';
 import { ENDPOINTS } from '@/api/endpoints';
 import type { ApiResponse, PaginatedResponse } from '@/api/types';
 import ProductCard from '@/components/ui/ProductCard';
+import { createCheckoutSession } from '@/services/checkout.service';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCartStore } from '@/store/useCartStore';
+import { useToastStore } from '@/store/useToastStore';
 import { useWishlistStore } from '@/store/useWishlistStore';
 import type { AbsaResult } from '@/types/absa';
 import type { Product, ProductVariant } from '@/types/product';
@@ -37,6 +39,7 @@ export function Component() {
   const toggleWishlist = useWishlistStore((s) => s.toggle);
   const isWishlisted = useWishlistStore((s) => s.has(product?.id ?? ''));
   const addToCart = useCartStore((s) => s.addItem);
+  const addToast = useToastStore((s) => s.addToast);
   const { isLoggedIn, isAdmin, user } = useAuthStore();
 
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -51,6 +54,7 @@ export function Component() {
   const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState('');
   const [selectedStorage, setSelectedStorage] = useState('');
+  const [buyNowLoading, setBuyNowLoading] = useState(false);
 
   const myReview = reviews.find((r) => r.userId === user?.id);
 
@@ -507,24 +511,43 @@ export function Component() {
                   <motion.button
                     whileHover={{ scale: canAddToCart ? 1.02 : 1 }}
                     whileTap={{ scale: canAddToCart ? 0.98 : 1 }}
-                    disabled={!canAddToCart}
-                    onClick={() => {
+                    disabled={!canAddToCart || buyNowLoading}
+                    onClick={async () => {
                       if (!isLoggedIn) {
                         navigate('/login');
                         return;
                       }
                       if (!canAddToCart) return;
-                      addToCart({
-                        ...product,
-                        image: displayImage,
-                        price: effectivePrice,
-                        stock: effectiveStock,
-                      });
-                      navigate('/checkout');
+                      setBuyNowLoading(true);
+                      try {
+                        const session = await createCheckoutSession({
+                          source: 'BUY_NOW',
+                          items: [
+                            {
+                              productId: product.id,
+                              quantity: 1,
+                              color: selectedColor || undefined,
+                              storage: selectedStorage || undefined,
+                            },
+                          ],
+                        });
+                        navigate(`/checkout?session=${session.id}`);
+                      } catch (err: unknown) {
+                        const axiosErr = err as {
+                          response?: { data?: { message?: string } };
+                        };
+                        addToast(
+                          'error',
+                          axiosErr.response?.data?.message ??
+                            'Không thể tạo phiên mua ngay.',
+                        );
+                      } finally {
+                        setBuyNowLoading(false);
+                      }
                     }}
                     className="btn-outline px-6 py-4 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Mua ngay
+                    {buyNowLoading ? 'Đang chuẩn bị...' : 'Mua ngay'}
                   </motion.button>
                   <motion.button
                     whileHover={{ scale: 1.05 }}

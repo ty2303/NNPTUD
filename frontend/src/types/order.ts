@@ -10,8 +10,57 @@ export interface OrderItem {
   productName: string;
   productImage: string;
   brand: string;
+  color?: string;
+  storage?: string;
   price: number;
   quantity: number;
+}
+
+export type CheckoutSource = 'CART' | 'BUY_NOW';
+export type CheckoutSessionStatus =
+  | 'ACTIVE'
+  | 'COMPLETED'
+  | 'EXPIRED'
+  | 'CANCELLED';
+
+export interface CheckoutSessionItem extends OrderItem {}
+
+export interface CheckoutSession {
+  id: string;
+  userId: string;
+  source: CheckoutSource;
+  status: CheckoutSessionStatus;
+  items: CheckoutSessionItem[];
+  subtotal: number;
+  shippingFee: number;
+  total: number;
+  expiresAt: string;
+  orderId?: string;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCheckoutSessionPayload {
+  source: CheckoutSource;
+  items: Array<{
+    productId: string;
+    quantity: number;
+    color?: string;
+    storage?: string;
+  }>;
+}
+
+export interface ConfirmCheckoutSessionPayload {
+  email: string;
+  customerName: string;
+  phone: string;
+  address: string;
+  city: string;
+  district: string;
+  ward: string;
+  note?: string;
+  paymentMethod: string;
 }
 
 export interface Order {

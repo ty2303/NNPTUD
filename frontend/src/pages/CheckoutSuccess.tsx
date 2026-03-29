@@ -4,23 +4,26 @@ import { useEffect } from 'react';
 import { Link, Navigate, useLocation } from 'react-router';
 
 import { useCartStore } from '@/store/useCartStore';
+import type { CheckoutSource } from '@/types/order';
 
 export const Component = CheckoutSuccess;
 
 function CheckoutSuccess() {
   const location = useLocation();
-  const clear = useCartStore((s) => s.clear);
+  const removeItems = useCartStore((s) => s.removeItems);
   const state = location.state as {
     fromCheckout?: boolean;
     orderId?: string;
+    checkoutSource?: CheckoutSource;
+    purchasedProductIds?: string[];
   } | null;
   const fromCheckout = state?.fromCheckout;
 
   useEffect(() => {
-    if (fromCheckout) {
-      clear();
+    if (fromCheckout && state?.checkoutSource === 'CART') {
+      removeItems(state.purchasedProductIds ?? []);
     }
-  }, [clear, fromCheckout]);
+  }, [fromCheckout, removeItems, state?.checkoutSource, state?.purchasedProductIds]);
 
   // Prevent direct URL access — only allow navigation from checkout flow
   if (!fromCheckout) {
